@@ -323,7 +323,8 @@ header {
 
 .home__buy,
 .home__contact,
-.home__owned {
+.home__owned,
+.home__repay{
   margin: 20px 5px;
 
   background-color: var(--clr-dbutton);
@@ -364,7 +365,16 @@ header {
   color: var(--clr-black);
 }
 
+.home__repay {
+  background-color: #5e29ad;
+  height: 50px;
+  width: 413px;
+  
+}
+
 .home__owned {
+  display: flex;
+  flex-direction: column;
   height: 50px;
   background-color: var(--clr-green);
 
@@ -378,6 +388,10 @@ header {
 @media screen and (max-width: 768px) {
   nav {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .home__repay {
+    width: 290px;
   }
 
   .nav__links {

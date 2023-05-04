@@ -1,19 +1,31 @@
 import { useEffect, useState } from 'react';
 
 import close from '../assets/close.svg';
+import { ethers } from 'ethers'
+import { Contract } from 'hardhat/internal/hardhat-network/stack-traces/model';
 
 const House = ({ home, provider, account, escrow, togglePop }) => {
     const [hasBought, setHasBought] = useState(false)
     const [hasLended, setHasLended] = useState(false)
     const [hasInspected, setHasInspected] = useState(false)
     const [hasSold, setHasSold] = useState(false)
+    const [repayed, setRepayed] = useState(false)
 
     const [buyer, setBuyer] = useState(null)
     const [lender, setLender] = useState(null)
     const [inspector, setInspector] = useState(null)
     const [seller, setSeller] = useState(null)
 
+
     const [owner, setOwner] = useState(null)
+
+    const tokens = (n) => {
+        return ethers.utils.parseUnits(n.toString(), "ether");
+    };
+
+    const parseUint = (n) => {
+        return ethers.BigNumber.from(n.toString())
+    }
 
     const fetchDetails = async () => {
         // -- Buyer
@@ -90,9 +102,11 @@ const House = ({ home, provider, account, escrow, togglePop }) => {
 
         // Lender sends funds to contract...
         const lendAmount = (await escrow.purchasePrice(home.id) - await escrow.escrowAmount(home.id))
+        await escrow.connect(signer).updateMortgageLedger(home.id, buyer, lendAmount.toString())
         await signer.sendTransaction({ to: escrow.address, value: lendAmount.toString(), gasLimit: 60000 })
-
         setHasLended(true)
+
+        console.log(lendAmount.toString())
     }
 
     const sellHandler = async () => {
@@ -109,10 +123,20 @@ const House = ({ home, provider, account, escrow, togglePop }) => {
         setHasSold(true)
     }
 
+    const repayHandler = async () => {
+        console.log("cloick")
+        const signer = await provider.getSigner()
+        var amount = await escrow.mortgageLedger(home.id, buyer)
+        let transaction = await escrow.connect(signer).repayLoan(home.id, { value: amount.toString(), gasLimit: 60000 } )
+        await transaction.wait()
+
+        setRepayed(true)
+    }
+
     useEffect(() => {
         fetchDetails()
         fetchOwner()
-    }, [hasSold])
+    }, [hasSold, repayed])
 
     return (
         <div className="home">
@@ -132,9 +156,16 @@ const House = ({ home, provider, account, escrow, togglePop }) => {
                     <h2 className='font-bold text-3xl py-1'>{home.attributes[0].value} ETH</h2>
 
                     {owner ? (
-                        <div className='home__owned'>
-                            Owned by {owner.slice(0, 6) + '...' + owner.slice(38, 42)}
-                        </div>
+                        <>
+                            { repayed ? (<div className='home__repay bg-[#40d1aa]'>
+                                Repayed Loan
+                            </div>) : (<button className='home__repay bg-[#1d1536]' onClick={repayHandler}>
+                                Repay
+                            </button>)}
+                            <div className='home__owned'>
+                                Owned by {owner.slice(0, 6) + '...' + owner.slice(38, 42)}
+                            </div>
+                        </>
                     ) : (
                         <div>
                             {(account === inspector) ? (
@@ -173,7 +204,7 @@ const House = ({ home, provider, account, escrow, togglePop }) => {
 
                     <h2 className='font-bold text-2xl py-2'>Facts and features</h2>
 
-                    <ul class="list-disc">
+                    <ul className="list-disc">
                         {home.attributes.map((attribute, index) => (
                             <li key={index}><strong>{attribute.trait_type}</strong> : {attribute.value}</li>
                         ))}

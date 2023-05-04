@@ -30,12 +30,21 @@ contract Escrow {
         _;
     }
 
+    modifier onlyLender() {
+        require(msg.sender == lender, "Only lender can call this method");
+        _; 
+    }
+
     mapping(uint256 => bool) public isListed;
     mapping(uint256 => uint256) public purchasePrice;
     mapping(uint256 => uint256) public escrowAmount;
     mapping(uint256 => address) public buyer;
     mapping(uint256 => bool) public inspectionPassed;
     mapping(uint256 => mapping(address => bool)) public approval;
+    // id -> address of buyer -> amount lended
+    mapping(uint256 => mapping(address => uint256)) public mortgageLedger;
+
+    event MortgageRepaid(uint256 nftID, address owner , uint256 amount);
 
     constructor(
         address _nftAddress,
@@ -82,8 +91,13 @@ contract Escrow {
         approval[_nftID][msg.sender] = true;
     }
 
+    // Update mortgageLedger
+    function updateMortgageLedger(uint256 _nftID, address _buyer, uint256 _amount) public onlyLender {
+        mortgageLedger[_nftID][_buyer] = _amount;
+    }
+
     // Finalize Sale
-    // -> Require inspection status (add more items here, like appraisal)
+    // -> Require inspection status
     // -> Require sale to be authorized
     // -> Require funds to be correct amount
     // -> Transfer NFT to buyer
@@ -105,6 +119,21 @@ contract Escrow {
         IERC721(nftAddress).transferFrom(address(this), buyer[_nftID], _nftID);
     }
 
+    // Repay mortgage
+    function repayLoan(uint256 _nftID) public payable {
+        require(mortgageLedger[_nftID][msg.sender] > 0, "No mortgage found for this NFT");
+        
+        uint256 amount = mortgageLedger[_nftID][msg.sender];
+        mortgageLedger[_nftID][msg.sender] = 0;
+        
+        require(msg.value == amount, "Insufficient funds");
+        // transfer funds from buyer to lender
+        payable(address(this)).transfer(msg.value);
+        payable(lender).transfer(amount);
+        
+        emit MortgageRepaid(_nftID, msg.sender, amount);
+    }
+
     // Cancel Sale (handle earnest deposit)
     // -> if inspection status is not approved, then refund, otherwise send to seller
     function cancelSale(uint256 _nftID) public {
@@ -117,7 +146,13 @@ contract Escrow {
 
     receive() external payable {}
 
+    fallback() external payable {}
+
     function getBalance() public view returns (uint256) {
         return address(this).balance;
+    }
+
+    function getMortgageAmount(uint256 _nftId, address _buyer) public view returns (uint256) {
+        return mortgageLedger[_nftId][_buyer];
     }
 }
